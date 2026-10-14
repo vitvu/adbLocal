@@ -2,23 +2,18 @@
 
 Android app that shares the phone's own ADB daemon on a **fixed LAN port**, so a PC/laptop on the same network can run `adb connect <ip>:<port>` and use it exactly like a USB cable — shell, install, logcat, and smooth screen mirroring with [scrcpy](https://github.com/Genymobile/scrcpy).
 
-## Modes
+## How it works (no root, no PC)
 
-| Mode | Requirements | Networks | How it works |
-|---|---|---|---|
-| **Root** | root (Magisk/KernelSU) | Wi-Fi, Ethernet, USB tether, hotspot | `setprop service.adb.tcp.port <port>` + restart adbd; adbd listens on the port directly |
-| **Wireless** | Android 11+, `WRITE_SECURE_SETTINGS` | Wi-Fi | Turns on Wireless debugging, finds its random port (sysprop / mDNS) and relays it to the fixed port |
-| **tcpip** | `adb tcpip 5555` once over USB | any | Relays adbd's 5555 to the fixed port |
-| **Auto** | — | — | Root → Wireless → tcpip |
+Android 11+ only. Once:
 
-## One-time setup (no root)
+1. Enable Developer options and **Wireless debugging**.
+2. Tap **Pair** in the app, open *Pair device with pairing code*, type the 6-digit code into the ADB Local notification.
 
-```sh
-adb shell pm grant com.vvtool.adblocal android.permission.WRITE_SECURE_SETTINGS
-```
+The app pairs with the phone's own adbd (like a PC would), self-grants `WRITE_SECURE_SETTINGS`, then runs `adb tcpip <port>` on itself. adbd listens on the fixed port; when a PC runs `adb connect ip:port` the phone shows the normal **"Allow USB debugging?"** prompt.
 
-With this permission the app can switch USB / Wireless debugging on by itself every time Wi-Fi connects.
-For Wireless mode, pair the PC once: Settings › Developer options › Wireless debugging › *Pair device with pairing code* → `adb pair <ip>:<pair-port> <code>`.
+After that it is automatic: on Wi-Fi connect / after reboot the app turns Wireless debugging on and reopens the port.
+
+Android 10 and older have no Wireless debugging, so without root a one-time `adb tcpip` from a PC is unavoidable there.
 
 ## Connect
 
@@ -27,13 +22,7 @@ adb connect 192.168.1.20:5555
 scrcpy -s 192.168.1.20:5555 --video-bit-rate 8M --max-fps 60
 ```
 
-## Features
-
-- Fixed, user-defined port; foreground service with Quick Settings tile and boot start
-- Auto-enables ADB when Wi-Fi connects; restarts sharing when the network or adbd port changes
-- Low-latency relay (TCP_NODELAY, 512 KB socket buffers), Wi-Fi low-latency lock and wake lock
-- Live status: IPs per interface, adbd port, connected PCs, traffic
-- Permission panel: root, WRITE_SECURE_SETTINGS, USB/Wireless debugging toggles, notifications, battery optimization, local network (Android 17)
+Built on [libadb-android](https://github.com/MuntashirAkon/libadb-android).
 
 ## Security
 

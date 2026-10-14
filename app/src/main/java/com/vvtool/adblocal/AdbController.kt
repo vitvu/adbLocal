@@ -1,41 +1,44 @@
 package com.vvtool.adblocal
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import io.github.muntashirakon.adb.AdbPairingRequiredException
+import io.github.muntashirakon.adb.android.AdbMdns
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Brings the device's own adbd up on a TCP port and tells the proxy where it is.
- *
- *  - ROOT:     setprop service.adb.tcp.port <port> + restart adbd. Works on any interface.
- *  - WIRELESS: Android 11+ "Wireless debugging" (TLS). Needs WRITE_SECURE_SETTINGS to toggle it;
- *              adbd picks a random port, which we discover and forward to the fixed port.
- *  - LEGACY:   adbd already listening after `adb tcpip 5555` from a PC.
+ * Opens adbd on a fixed TCP port without root and without a PC:
+ *  1. Wireless debugging (Android 11+) is on.
+ *  2. The app pairs with it once (pairing code), like a PC would.
+ *  3. Over that connection it runs `tcpip:<port>` → adbd restarts listening on <port>.
+ * A PC then runs `adb connect ip:port` and the phone shows the normal "Allow USB debugging?" prompt.
  */
 object AdbController {
-    const val MODE_AUTO = "auto"
-    const val MODE_ROOT = "root"
-    const val MODE_WIRELESS = "wireless"
-    const val MODE_LEGACY = "legacy"
-
     private const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
 
-    class Backend(
-        val label: String,
-        /** adbd itself listens on the user port, no proxy needed. */
-        val direct: Boolean,
-        val targetPort: () -> Int,
-        val error: String? = null,
-    )
+    sealed class Result {
+        object Ok : Result()
+        object NeedWireless : Result()
+        object NeedPair : Result()
+        object NoWifi : Result()
+        object Unsupported : Result()
+        class Error(val message: String) : Result()
+    }
 
-    private fun fail(msg: String) = Backend("", false, { -1 }, msg)
+    val supported get() = Build.VERSION.SDK_INT >= 30
+
+    init {
+        // libadb reads Conscrypt's exportKeyingMaterial through reflection.
+        if (Build.VERSION.SDK_INT >= 28) runCatching { HiddenApiBypass.addHiddenApiExemptions("") }
+    }
 
     fun hasSecureSettings(ctx: Context) =
         ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
@@ -46,153 +49,96 @@ object AdbController {
     fun isWirelessDebuggingOn(ctx: Context) =
         Settings.Global.getInt(ctx.contentResolver, ADB_WIFI_ENABLED, 0) == 1
 
-    fun setUsbDebugging(ctx: Context, on: Boolean) = putGlobal(ctx, Settings.Global.ADB_ENABLED, on)
-
-    fun setWirelessDebugging(ctx: Context, on: Boolean) = putGlobal(ctx, ADB_WIFI_ENABLED, on)
-
-    private fun putGlobal(ctx: Context, key: String, on: Boolean): Boolean = try {
-        Settings.Global.putInt(ctx.contentResolver, key, if (on) 1 else 0)
+    private fun putGlobal(ctx: Context, key: String, value: Int) = try {
+        Settings.Global.putInt(ctx.contentResolver, key, value)
     } catch (_: SecurityException) {
         false
     }
 
-    /** Self-grant WRITE_SECURE_SETTINGS when root is available. */
-    fun grantSecureWithRoot(ctx: Context): Boolean =
-        Shell.su("pm grant ${ctx.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}").ok &&
-            hasSecureSettings(ctx)
+    fun isListening(port: Int) = NetUtil.isPortOpen(port)
 
-    fun resolveMode(ctx: Context, mode: String): String {
-        if (mode != MODE_AUTO) return mode
-        return when {
-            Shell.hasRoot() -> MODE_ROOT
-            Build.VERSION.SDK_INT >= 30 && NetUtil.isWifiConnected(ctx) &&
-                (hasSecureSettings(ctx) || isWirelessDebuggingOn(ctx)) -> MODE_WIRELESS
-            else -> MODE_LEGACY
-        }
-    }
+    /** Make adbd listen on [port]. Runs on a worker thread. */
+    fun openPort(ctx: Context, port: Int): Result {
+        if (isListening(port)) return Result.Ok
+        if (!supported) return Result.Unsupported
+        if (!NetUtil.isWifiConnected(ctx)) return Result.NoWifi
 
-    /**
-     * @param allowToggle may switch ADB / wireless debugging on (auto-on-Wi-Fi or explicit user start).
-     */
-    fun prepare(ctx: Context, prefs: Prefs, allowToggle: Boolean): Backend {
-        val port = prefs.port
-        if (allowToggle && hasSecureSettings(ctx) && !isUsbDebuggingOn(ctx)) setUsbDebugging(ctx, true)
-        return when (resolveMode(ctx, prefs.mode)) {
-            MODE_ROOT -> prepareRoot(port)
-            MODE_WIRELESS -> prepareWireless(ctx, port, allowToggle)
-            else -> prepareLegacy(prefs.legacyPort, port)
-        }
-    }
-
-    private fun prepareRoot(port: Int): Backend {
-        if (!Shell.hasRoot()) return fail("Không có quyền root")
-        val current = Shell.su("getprop service.adb.tcp.port").out.trim()
-        if (current != port.toString() || !NetUtil.isPortOpen(port)) {
-            Shell.su("setprop service.adb.tcp.port $port; stop adbd; start adbd")
-            if (!waitOpen(port, 6000)) return fail("adbd không mở cổng $port sau khi khởi động lại")
-        }
-        return Backend("Root · adbd TCP", direct = true, targetPort = { port })
-    }
-
-    private fun prepareWireless(ctx: Context, port: Int, allowToggle: Boolean): Backend {
-        if (Build.VERSION.SDK_INT < 30) return fail("Gỡ lỗi không dây cần Android 11 trở lên")
-        if (!NetUtil.isWifiConnected(ctx)) {
-            return fail("Gỡ lỗi không dây chỉ chạy khi có Wi-Fi. Dùng chế độ Root cho Ethernet / USB / Hotspot")
-        }
         if (!isWirelessDebuggingOn(ctx)) {
-            if (!hasSecureSettings(ctx)) return fail("Chưa cấp WRITE_SECURE_SETTINGS để tự bật Gỡ lỗi không dây")
-            if (!allowToggle) return fail("Gỡ lỗi không dây đang tắt. Bật \"Tự bật ADB khi có Wi-Fi\" hoặc nhấn Bắt đầu")
-            setWirelessDebugging(ctx, true)
+            if (!hasSecureSettings(ctx)) return Result.NeedWireless
+            putGlobal(ctx, Settings.Global.ADB_ENABLED, 1)
+            putGlobal(ctx, ADB_WIFI_ENABLED, 1)
         }
-        var cached = findTlsPort(ctx, 8000)
-        if (cached <= 0) {
-            return fail("Không tìm thấy cổng Gỡ lỗi không dây. Mở Gỡ lỗi không dây một lần và chọn \"Luôn cho phép trên mạng này\"")
+
+        val client = AdbClient.create(ctx)
+        try {
+            if (!client.connectTls(ctx, 12_000)) return Result.Error("Không kết nối được tới Gỡ lỗi không dây")
+        } catch (_: AdbPairingRequiredException) {
+            Prefs(ctx).paired = false
+            return Result.NeedPair
+        } catch (_: InterruptedException) {
+            return Result.Error("Không tìm thấy Gỡ lỗi không dây. Hãy bật nó và chọn \"Luôn cho phép trên mạng này\"")
+        } catch (e: Exception) {
+            return Result.Error("Lỗi kết nối ADB: ${e.message}")
         }
-        return Backend("Gỡ lỗi không dây (TLS)", direct = cached == port, targetPort = {
-            if (!NetUtil.isPortOpen(cached, 250)) {
-                if (!isWirelessDebuggingOn(ctx) && hasSecureSettings(ctx)) setWirelessDebugging(ctx, true)
-                cached = findTlsPort(ctx, 4000)
+
+        try {
+            Prefs(ctx).paired = true
+            // Let the app turn Wireless debugging on by itself next time (after reboot / Wi-Fi change).
+            if (!hasSecureSettings(ctx)) {
+                run(client, "shell:pm grant ${ctx.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}")
             }
-            cached
-        })
-    }
-
-    private fun prepareLegacy(adbdPort: Int, port: Int): Backend {
-        if (!NetUtil.isPortOpen(adbdPort)) {
-            return fail("adbd chưa mở TCP. Cắm USB và chạy \"adb tcpip $adbdPort\" một lần (mất sau khi khởi động lại), hoặc dùng Root / Không dây")
+            run(client, "tcpip:$port")
+        } catch (e: Exception) {
+            return Result.Error("Lỗi khi mở cổng: ${e.message}")
+        } finally {
+            runCatching { client.close() }
         }
-        return Backend("adb tcpip :$adbdPort", direct = adbdPort == port, targetPort = { adbdPort })
-    }
 
-    private fun waitOpen(port: Int, timeoutMs: Long): Boolean {
-        val end = System.currentTimeMillis() + timeoutMs
+        val end = System.currentTimeMillis() + 8000
         while (System.currentTimeMillis() < end) {
-            if (NetUtil.isPortOpen(port, 300)) return true
+            if (isListening(port)) return Result.Ok
             Thread.sleep(300)
         }
-        return false
+        return Result.Error("adbd không mở cổng $port")
     }
 
-    /** Wireless debugging port: system property first, then mDNS. */
-    fun findTlsPort(ctx: Context, timeoutMs: Long): Int {
-        val end = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < end) {
-            propPort()?.let { if (NetUtil.isPortOpen(it)) return it }
-            val p = nsdPort(ctx, 2500)
-            if (p > 0 && NetUtil.isPortOpen(p)) return p
-            Thread.sleep(500)
-        }
-        return -1
+    private fun run(client: AdbClient, destination: String): String {
+        val stream = client.openStream(destination)
+        return stream.openInputStream().use { it.readBytes().decodeToString() }.also { runCatching { stream.close() } }
     }
 
-    @SuppressLint("PrivateApi")
-    private fun propPort(): Int? {
-        val viaReflection = runCatching {
-            Class.forName("android.os.SystemProperties")
-                .getMethod("get", String::class.java)
-                .invoke(null, "service.adb.tls.port") as String
-        }.getOrNull()
-        val v = viaReflection?.takeIf { it.isNotBlank() }
-            ?: Shell.sh("getprop service.adb.tls.port").out.trim()
-        return v.toIntOrNull()?.takeIf { it > 0 }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun nsdPort(ctx: Context, timeoutMs: Long): Int {
-        val nsd = ctx.getSystemService(NsdManager::class.java) ?: return -1
-        val mine = NetUtil.lanAddresses().map { it.ip }.toSet()
+    /** Finds the pairing port while the "Pair device with pairing code" dialog is open. */
+    fun findPairingPort(ctx: Context, timeoutMs: Long): Int {
+        val port = AtomicInteger(-1)
         val latch = CountDownLatch(1)
-        var found = -1
-        val listener = object : NsdManager.DiscoveryListener {
-            override fun onServiceFound(info: NsdServiceInfo) {
-                runCatching {
-                    nsd.resolveService(info, object : NsdManager.ResolveListener {
-                        override fun onServiceResolved(si: NsdServiceInfo) {
-                            if (si.host?.hostAddress in mine) {
-                                found = si.port
-                                latch.countDown()
-                            }
-                        }
-
-                        override fun onResolveFailed(si: NsdServiceInfo, errorCode: Int) {}
-                    })
-                }
+        val mdns = AdbMdns(ctx, AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, p ->
+            if (p > 0) {
+                port.set(p)
+                latch.countDown()
             }
-
-            override fun onDiscoveryStarted(serviceType: String) {}
-            override fun onDiscoveryStopped(serviceType: String) {}
-            override fun onServiceLost(info: NsdServiceInfo) {}
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) = latch.countDown()
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
         }
-        return try {
-            nsd.discoverServices("_adb-tls-connect._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
+        mdns.start()
+        try {
             latch.await(timeoutMs, TimeUnit.MILLISECONDS)
-            found
-        } catch (_: Exception) {
-            -1
         } finally {
-            runCatching { nsd.stopServiceDiscovery(listener) }
+            mdns.stop()
         }
+        return port.get()
     }
+
+    fun pair(ctx: Context, port: Int, code: String): Boolean {
+        val ok = AdbClient.create(ctx).use { it.pair(port, code) }
+        if (ok) Prefs(ctx).paired = true
+        return ok
+    }
+
+    /** Developer options, scrolled to the Wireless debugging entry where supported. */
+    fun wirelessSettingsIntent(): Intent =
+        Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+            putExtra(":settings:fragment_args_key", "toggle_adb_wireless")
+            putExtra(":settings:show_fragment_args", Bundle().apply {
+                putString(":settings:fragment_args_key", "toggle_adb_wireless")
+            })
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
 }

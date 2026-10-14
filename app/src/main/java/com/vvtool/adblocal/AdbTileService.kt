@@ -42,7 +42,7 @@ class AdbTileService : TileService() {
         tile.state = if (s.serviceOn) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         if (Build.VERSION.SDK_INT >= 29) {
             tile.subtitle = when {
-                s.sharing -> ":${s.listenPort}"
+                s.phase == Phase.SHARING -> ":${s.port}"
                 s.serviceOn -> "Đang chờ"
                 else -> "Tắt"
             }

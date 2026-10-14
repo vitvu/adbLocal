@@ -6,6 +6,9 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 appcompat = "1.8.0"
 material = "1.14.0"
+libadb = "3.1.1"
+hiddenapibypass = "6.2"
+bouncycastle = "1.81"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -14,6 +17,9 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+libadb = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadb" }
+hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenapibypass" }
+bcprov = { group = "org.bouncycastle", name = "bcprov-jdk15to18", version.ref = "bouncycastle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

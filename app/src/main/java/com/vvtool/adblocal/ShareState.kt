@@ -4,21 +4,14 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArraySet
 
-data class ClientInfo(val id: Int, val address: String, val since: Long)
+enum class Phase { OFF, WAITING_NETWORK, WORKING, NEED_WIRELESS, NEED_PAIR, PAIRING, SHARING, ERROR }
 
 data class Status(
     val serviceOn: Boolean = false,
-    val sharing: Boolean = false,
-    val backend: String = "",
-    val listenPort: Int = 0,
-    val targetPort: Int = 0,
-    val direct: Boolean = false,
+    val phase: Phase = Phase.OFF,
+    val port: Int = 0,
     val addresses: List<NetUtil.Addr> = emptyList(),
-    val clients: List<ClientInfo> = emptyList(),
-    val bytesFromPc: Long = 0,
-    val bytesToPc: Long = 0,
     val message: String = "",
-    val error: Boolean = false,
 )
 
 /** Process-wide observable status shared between the service, UI and tile. */

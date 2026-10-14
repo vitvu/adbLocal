@@ -156,26 +156,12 @@
             </LinearLayout>
         </LinearLayout>
 
-        <TextView style="@style/Section" android:text="Trạng thái" />
+        <TextView style="@style/Section" android:text="Thiết lập 1 lần" />
 
         <com.google.android.material.card.MaterialCardView style="@style/Card">
 
             <LinearLayout
-                android:id="@+id/infoList"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-        </com.google.android.material.card.MaterialCardView>
-
-        <TextView
-            android:id="@+id/tvClientsTitle"
-            style="@style/Section"
-            android:text="Máy tính đang kết nối" />
-
-        <com.google.android.material.card.MaterialCardView style="@style/Card">
-
-            <LinearLayout
-                android:id="@+id/clientList"
+                android:id="@+id/stepList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
@@ -226,72 +212,6 @@
                         android:text="Lưu" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
-                    android:text="Chế độ bật ADB"
-                    android:textColor="@color/text"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/modeGroup"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:selectionRequired="true"
-                    app:singleSelection="true">
-
-                    <Button
-                        android:id="@+id/modeAuto"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="0dp"
-                        android:text="Tự động"
-                        android:textSize="12sp" />
-
-                    <Button
-                        android:id="@+id/modeRoot"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="0dp"
-                        android:text="Root"
-                        android:textSize="12sp" />
-
-                    <Button
-                        android:id="@+id/modeWireless"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="0dp"
-                        android:text="Không dây"
-                        android:textSize="12sp" />
-
-                    <Button
-                        android:id="@+id/modeLegacy"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingHorizontal="0dp"
-                        android:text="tcpip"
-                        android:textSize="12sp" />
-                </com.google.android.material.button.MaterialButtonToggleGroup>
-
-                <TextView
-                    android:id="@+id/tvModeHint"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/text_muted"
-                    android:textSize="13sp" />
-
                 <LinearLayout
                     android:id="@+id/switchList"
                     android:layout_width="match_parent"
@@ -299,17 +219,6 @@
                     android:layout_marginTop="8dp"
                     android:orientation="vertical" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <TextView style="@style/Section" android:text="Quyền &amp; ADB hệ thống" />
-
-        <com.google.android.material.card.MaterialCardView style="@style/Card">
-
-            <LinearLayout
-                android:id="@+id/permList"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
         </com.google.android.material.card.MaterialCardView>
 
         <TextView style="@style/Section" android:text="Cách kết nối từ PC" />
