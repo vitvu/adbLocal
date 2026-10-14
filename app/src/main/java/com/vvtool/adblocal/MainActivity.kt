@@ -51,6 +51,9 @@ class MainActivity : AppCompatActivity() {
             if (AdbShareService.running) AdbShareService.stop(this) else withNotifications { AdbShareService.start(this) }
         }
         findViewById<View>(R.id.btnCopy).setOnClickListener { copy("adb connect ${address()}") }
+        findViewById<View>(R.id.tvDonate).setOnClickListener {
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://paypal.me/vudinhviet"))) }
+        }
 
         etPort = findViewById(R.id.etPort)
         etPort.setText(prefs.port.toString())
