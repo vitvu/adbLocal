@@ -6,10 +6,10 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -29,19 +29,10 @@ import com.google.android.material.textfield.TextInputEditText
 class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
-    private lateinit var tvStatus: TextView
-    private lateinit var tvAddress: TextView
-    private lateinit var tvMessage: TextView
-    private lateinit var dot: View
-    private lateinit var btnToggle: MaterialButton
     private lateinit var etPort: TextInputEditText
-    private lateinit var tvHelp: TextView
-
-    private val steps = ArrayList<Step>()
     private val statusListener: (Status) -> Unit = { render(it) }
 
-    /** One setup step: [state] returns true = done, false = to do. */
-    private class Step(val status: TextView, val button: MaterialButton, val state: () -> Boolean, val buttonLabel: (Boolean) -> String)
+    private class Step(val title: String, val desc: String, val done: Boolean, val button: String, val action: () -> Unit)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -55,27 +46,23 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        tvStatus = findViewById(R.id.tvStatus)
-        tvAddress = findViewById(R.id.tvAddress)
-        tvMessage = findViewById(R.id.tvMessage)
-        dot = findViewById(R.id.dot)
-        btnToggle = findViewById(R.id.btnToggle)
-        etPort = findViewById(R.id.etPort)
-        tvHelp = findViewById(R.id.tvHelp)
-        findViewById<TextView>(R.id.tvVersion).text = "v" + runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull().orEmpty()
-        findViewById<View>(R.id.tvRepo).setOnClickListener {
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/vitvu/adblocal"))) }
-        }
-
-        btnToggle.setOnClickListener {
+        findViewById<TextView>(R.id.tvDevice).text = "Android ${Build.VERSION.RELEASE}"
+        findViewById<View>(R.id.btnToggle).setOnClickListener {
             if (AdbShareService.running) AdbShareService.stop(this) else withNotifications { AdbShareService.start(this) }
         }
-        findViewById<View>(R.id.btnCopy).setOnClickListener { copy(connectCommand()) }
+        findViewById<View>(R.id.btnCopy).setOnClickListener { copy("adb connect ${address()}") }
 
-        setupSteps()
-        setupSettings()
+        etPort = findViewById(R.id.etPort)
+        etPort.setText(prefs.port.toString())
+        etPort.setOnEditorActionListener { _, id, _ ->
+            if (id == EditorInfo.IME_ACTION_DONE) savePort()
+            false
+        }
+        findViewById<View>(R.id.btnSavePort).setOnClickListener { savePort() }
+        findViewById<MaterialSwitch>(R.id.swAuto).apply {
+            isChecked = prefs.auto
+            setOnCheckedChangeListener { _, on -> prefs.auto = on }
+        }
     }
 
     override fun onStart() {
@@ -85,7 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshSteps()
+        render(ShareState.status)
     }
 
     override fun onStop() {
@@ -93,171 +80,134 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
 
-    // ---------------- status ----------------
+    private fun address(): String {
+        val ip = ShareState.status.addresses.firstOrNull()?.ip ?: NetUtil.lanAddresses().firstOrNull()?.ip ?: "<ip>"
+        return "$ip:${prefs.port}"
+    }
 
     private fun render(s: Status) {
-        val ip = s.addresses.firstOrNull()?.ip ?: NetUtil.lanAddresses().firstOrNull()?.ip
-        val port = prefs.port
         val (label, color) = when (s.phase) {
-            Phase.SHARING -> "Sharing ADB" to 0xFF7CFFB2.toInt()
+            Phase.SHARING -> "Sharing" to 0xFF7CFFB2.toInt()
             Phase.OFF -> "Off" to 0x99FFFFFF.toInt()
             Phase.ERROR -> "Error" to 0xFFFFB4AB.toInt()
-            Phase.NEED_PAIR, Phase.NEED_WIRELESS -> "Setup needed" to 0xFFFFE08A.toInt()
+            Phase.NEED_SETUP -> "Setup needed" to 0xFFFFE08A.toInt()
             Phase.PAIRING -> "Pairing" to 0xFFFFE08A.toInt()
             else -> "Starting" to 0xFFFFE08A.toInt()
         }
-        tvStatus.text = label
-        dot.background.setTint(color)
-        tvAddress.text = if (ip != null) "$ip:$port" else "No Wi-Fi"
-        tvMessage.text = if (s.serviceOn) s.message else "Tap Start to open ADB on port $port"
-        btnToggle.text = if (s.serviceOn) "Stop" else "Start"
-        tvHelp.text = buildString {
-            val addr = "${ip ?: "<ip>"}:$port"
-            appendLine("1. PC and phone on the same Wi-Fi / LAN.")
-            appendLine("2. On the PC:  adb connect $addr")
-            appendLine("3. The phone asks \"Allow USB debugging?\" → tick Always allow → Allow.")
-            append("4. Smooth screen mirroring:  scrcpy -s $addr --video-bit-rate 8M --max-fps 60")
+        findViewById<TextView>(R.id.tvStatus).text = label
+        findViewById<View>(R.id.dot).background.setTint(color)
+        findViewById<TextView>(R.id.tvAddress).text = address()
+        findViewById<TextView>(R.id.tvMessage).text = if (s.serviceOn) s.message else "Tap Start to share ADB"
+        findViewById<MaterialButton>(R.id.btnToggle).text = if (s.serviceOn) "Stop" else "Start"
+        renderSetup()
+        renderClients(s)
+    }
+
+    // ---------------- setup: only the steps this device still needs ----------------
+
+    private fun steps(): List<Step> {
+        val devOn = Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        val openDev = {
+            val action = if (devOn) Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS else Settings.ACTION_DEVICE_INFO_SETTINGS
+            runCatching { startActivity(Intent(action)) }
+            Unit
         }
-        refreshSteps()
-    }
+        val devHint = if (devOn) "" else "First enable Developer options: About phone › tap Build number 7 times. "
 
-    private fun connectCommand(): String {
-        val ip = ShareState.status.addresses.firstOrNull()?.ip ?: NetUtil.lanAddresses().firstOrNull()?.ip ?: "<ip>"
-        return "adb connect $ip:${prefs.port}"
-    }
-
-    // ---------------- setup steps ----------------
-
-    private fun setupSteps() {
-        val list = findViewById<LinearLayout>(R.id.stepList)
         if (!AdbController.supported) {
-            list.addView(text(
-                "Android ${Build.VERSION.RELEASE} has no \"Wireless debugging\", so an app cannot open ADB by itself " +
-                    "without root. This is an Android security limit: Android 11 or newer is required.\n\n" +
-                    "The app still detects port ${prefs.port} if it was already opened (adb tcpip from a PC).",
-                14f, R.color.text_muted,
-            ))
+            // Android 10 and older: adbd can only be switched to TCP from a PC (or root).
+            if (AdbController.isListening(prefs.port)) return emptyList()
+            return listOf(
+                Step("Turn on USB debugging", devHint + "Developer options › USB debugging.",
+                    AdbController.isUsbDebuggingOn(this), "Open", openDev),
+                Step("Run once from a PC", "Plug in USB and run:\nadb tcpip ${prefs.port}\nRepeat after every reboot.",
+                    false, "Copy") { copy("adb tcpip ${prefs.port}") },
+            )
+        }
+
+        // Android 11+: pair once with the built-in Wireless debugging, then everything is automatic.
+        if (prefs.paired) return emptyList()
+        val wirelessOn = AdbController.isWirelessDebuggingOn(this)
+        return listOf(
+            Step("Turn on Wireless debugging", devHint + "Choose \"Always allow on this network\".",
+                wirelessOn, "Open") { runCatching { startActivity(AdbController.wirelessSettingsIntent()) } },
+            Step("Pair", "Tap Pair, choose \"Pair device with pairing code\", then type the code into the ADB Local notification.",
+                false, "Pair") {
+                withNotifications {
+                    AdbShareService.startPairing(this)
+                    runCatching { startActivity(AdbController.wirelessSettingsIntent()) }
+                }
+            },
+        )
+    }
+
+    private fun renderSetup() {
+        val steps = steps()
+        val visible = if (steps.isEmpty()) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.tvSetupTitle).visibility = visible
+        findViewById<View>(R.id.cardSetup).visibility = visible
+        val list = findViewById<LinearLayout>(R.id.stepList)
+        list.removeAllViews()
+        steps.forEachIndexed { i, st ->
+            if (i > 0) list.addView(divider())
+            val row = LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(10), 0, dp(10))
+            }
+            val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(text((if (st.done) "✓ " else "${i + 1}. ") + st.title, 15f,
+                if (st.done) R.color.green else R.color.text, bold = true))
+            if (!st.done) texts.addView(text(st.desc, 13f, R.color.text_muted))
+            row.addView(texts, LinearLayout.LayoutParams(0, wrap, 1f).apply { marginEnd = dp(10) })
+            if (!st.done) {
+                row.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTonalStyle).apply {
+                    text = st.button
+                    setOnClickListener { st.action() }
+                })
+            }
+            list.addView(row)
+        }
+    }
+
+    // ---------------- connected PCs ----------------
+
+    private fun renderClients(s: Status) {
+        val clients = s.clients.takeIf { s.phase == Phase.SHARING }
+        val visible = if (clients == null) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.tvClientsTitle).visibility = visible
+        findViewById<View>(R.id.cardClients).visibility = visible
+        if (clients == null) return
+        findViewById<TextView>(R.id.tvClientsTitle).text = "Connected PCs (${clients.size})"
+        val list = findViewById<LinearLayout>(R.id.clientList)
+        list.removeAllViews()
+        if (clients.isEmpty()) {
+            list.addView(text("None yet. On your PC: adb connect ${address()}", 14f, R.color.text_muted))
             return
         }
-        addStep(list, "1. Enable Developer options",
-            "Settings › About phone › tap \"Build number\" 7 times",
-            { Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1 },
-            { "Open" }) {
-            val dev = Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
-            runCatching {
-                startActivity(Intent(if (dev) Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS else Settings.ACTION_DEVICE_INFO_SETTINGS))
-            }
-        }
-        addStep(list, "2. Turn on Wireless debugging",
-            "In Developer options. When asked, choose \"Always allow on this network\"",
-            { AdbController.isWirelessDebuggingOn(this) }, { if (it) "Open" else "Turn on" }) {
-            runCatching { startActivity(AdbController.wirelessSettingsIntent()) }
-        }
-        addStep(list, "3. Pair with this phone",
-            "Tap Pair → in Wireless debugging choose \"Pair device with pairing code\" → " +
-                "type the 6 digits into the ADB Local notification. Only needed once",
-            { prefs.paired }, { if (it) "Re-pair" else "Pair" }) {
-            withNotifications {
-                AdbShareService.startPairing(this)
-                runCatching { startActivity(AdbController.wirelessSettingsIntent()) }
-                toast("Open \"Pair device with pairing code\", then enter the code in the notification")
-            }
+        clients.forEachIndexed { i, c ->
+            if (i > 0) list.addView(divider())
+            val row = LinearLayout(this).apply { setPadding(0, dp(8), 0, dp(8)) }
+            row.addView(text(c.ip, 15f, R.color.text, bold = true), LinearLayout.LayoutParams(0, wrap, 1f))
+            row.addView(text(DateUtils.getRelativeTimeSpanString(c.since).toString(), 13f, R.color.text_muted))
+            list.addView(row)
         }
     }
 
-    private fun addStep(
-        parent: LinearLayout, title: String, desc: String,
-        state: () -> Boolean, buttonLabel: (Boolean) -> String, action: () -> Unit,
-    ) {
-        if (parent.childCount > 0) parent.addView(divider())
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(12), 0, dp(12))
-        }
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(text(title, 15f, R.color.text, bold = true), LinearLayout.LayoutParams(0, wrap, 1f))
-        val status = text("", 11f, R.color.text, bold = true).apply {
-            setBackgroundResource(R.drawable.bg_chip)
-            setPadding(dp(8), dp(2), dp(8), dp(2))
-        }
-        head.addView(status, LinearLayout.LayoutParams(wrap, wrap).apply { marginStart = dp(8) })
-        texts.addView(head)
-        texts.addView(text(desc, 13f, R.color.text_muted))
-        row.addView(texts, LinearLayout.LayoutParams(0, wrap, 1f).apply { marginEnd = dp(10) })
-        val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTonalStyle).apply {
-            minWidth = 0
-            minimumWidth = 0
-            setPadding(dp(14), 0, dp(14), 0)
-            setOnClickListener { action() }
-        }
-        row.addView(btn)
-        parent.addView(row)
-        steps += Step(status, btn, state, buttonLabel)
-    }
-
-    private fun refreshSteps() {
-        for (s in steps) {
-            val done = s.state()
-            s.status.text = if (done) "Done" else "To do"
-            s.status.setTextColor(ContextCompat.getColor(this, if (done) R.color.green else R.color.amber))
-            s.status.background.setTint(ContextCompat.getColor(this, if (done) R.color.green_soft else R.color.amber_soft))
-            s.button.text = s.buttonLabel(done)
-        }
-    }
-
-    // ---------------- settings ----------------
-
-    private fun setupSettings() {
-        etPort.setText(prefs.port.toString())
-        etPort.setOnEditorActionListener { _, id, _ ->
-            if (id == EditorInfo.IME_ACTION_DONE) savePort()
-            false
-        }
-        findViewById<View>(R.id.btnSavePort).setOnClickListener { savePort() }
-
-        val list = findViewById<LinearLayout>(R.id.switchList)
-        addSwitch(list, "Auto-enable ADB on Wi-Fi",
-            "Reopen the port when Wi-Fi connects or after a reboot", prefs.autoOnWifi) { prefs.autoOnWifi = it }
-        addSwitch(list, "Start on boot",
-            "Run the service automatically after the phone starts", prefs.startOnBoot) { prefs.startOnBoot = it }
-    }
+    // ---------------- helpers ----------------
 
     private fun savePort() {
         val p = etPort.text?.toString()?.toIntOrNull()
         if (p == null || p !in 1024..65535) {
-            etPort.error = "Port must be between 1024 and 65535"
+            etPort.error = "1024 – 65535"
             return
         }
         if (p != prefs.port) {
             prefs.port = p
             if (AdbShareService.running) AdbShareService.start(this)
-            toast("Port $p saved")
         }
         etPort.clearFocus()
         render(ShareState.status)
     }
-
-    private fun addSwitch(parent: LinearLayout, title: String, desc: String, value: Boolean, onChange: (Boolean) -> Unit) {
-        parent.addView(divider())
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(12), 0, dp(12))
-        }
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(text(title, 15f, R.color.text, bold = true))
-        texts.addView(text(desc, 13f, R.color.text_muted))
-        row.addView(texts, LinearLayout.LayoutParams(0, wrap, 1f).apply { marginEnd = dp(12) })
-        val sw = MaterialSwitch(this).apply { isChecked = value }
-        sw.setOnCheckedChangeListener { _, checked -> onChange(checked) }
-        row.addView(sw)
-        row.setOnClickListener { sw.toggle() }
-        parent.addView(row)
-    }
-
-    // ---------------- helpers ----------------
 
     private var pendingAfterPermission: (() -> Unit)? = null
 
@@ -297,8 +247,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun copy(s: String) {
         getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("adb", s))
-        toast("Copied: $s")
+        Toast.makeText(this, "Copied: $s", Toast.LENGTH_SHORT).show()
     }
-
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 }

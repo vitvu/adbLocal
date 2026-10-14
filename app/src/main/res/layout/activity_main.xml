@@ -5,8 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
-    android:clipToPadding="false"
-    android:fillViewport="true">
+    android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,41 +13,25 @@
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
         android:paddingTop="12dp"
-        android:paddingBottom="28dp">
+        android:paddingBottom="24dp">
 
-        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="8dp">
+            android:padding="6dp">
 
-            <LinearLayout
+            <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_name"
-                    android:textColor="@color/text"
-                    android:textSize="30sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Share ADB over your LAN, just like a USB cable"
-                    android:textColor="@color/text_muted"
-                    android:textSize="14sp" />
-            </LinearLayout>
+                android:text="@string/app_name"
+                android:textColor="@color/text"
+                android:textSize="28sp"
+                android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvVersion"
+                android:id="@+id/tvDevice"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_chip"
@@ -60,12 +43,10 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Hero -->
         <LinearLayout
-            android:id="@+id/hero"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_hero"
             android:orientation="vertical"
             android:padding="22dp">
@@ -73,8 +54,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:gravity="center_vertical">
 
                 <View
                     android:id="@+id/dot"
@@ -84,38 +64,30 @@
 
                 <TextView
                     android:id="@+id/tvStatus"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
-                    android:layout_weight="1"
                     android:textColor="@color/white"
                     android:textSize="15sp"
                     android:textStyle="bold" />
-
-                <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:alpha="0.85"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_adb" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/tvAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="14dp"
                 android:fontFamily="monospace"
                 android:textColor="@color/white"
                 android:textIsSelectable="true"
-                android:textSize="28sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvMessage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:alpha="0.9"
                 android:textColor="@color/white"
                 android:textSize="13sp" />
@@ -123,8 +95,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:orientation="horizontal">
+                android:layout_marginTop="16dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnToggle"
@@ -156,9 +127,14 @@
             </LinearLayout>
         </LinearLayout>
 
-        <TextView style="@style/Section" android:text="One-time setup" />
+        <TextView
+            android:id="@+id/tvSetupTitle"
+            style="@style/Section"
+            android:text="Setup" />
 
-        <com.google.android.material.card.MaterialCardView style="@style/Card">
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardSetup"
+            style="@style/Card">
 
             <LinearLayout
                 android:id="@+id/stepList"
@@ -167,7 +143,24 @@
                 android:orientation="vertical" />
         </com.google.android.material.card.MaterialCardView>
 
-        <TextView style="@style/Section" android:text="Settings" />
+        <TextView
+            android:id="@+id/tvClientsTitle"
+            style="@style/Section" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardClients"
+            style="@style/Card">
+
+            <LinearLayout
+                android:id="@+id/clientList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            style="@style/Section"
+            android:text="Settings" />
 
         <com.google.android.material.card.MaterialCardView style="@style/Card">
 
@@ -179,15 +172,14 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:gravity="center_vertical">
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="Fixed port (1024 – 65535)"
+                        android:hint="Port"
                         app:boxCornerRadiusBottomEnd="16dp"
                         app:boxCornerRadiusBottomStart="16dp"
                         app:boxCornerRadiusTopEnd="16dp"
@@ -212,38 +204,15 @@
                         android:text="Save" />
                 </LinearLayout>
 
-                <LinearLayout
-                    android:id="@+id/switchList"
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/swAuto"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical" />
+                    android:layout_marginTop="12dp"
+                    android:text="Auto start (boot &amp; Wi-Fi)"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
-        <TextView style="@style/Section" android:text="Connect from a PC" />
-
-        <com.google.android.material.card.MaterialCardView style="@style/Card">
-
-            <TextView
-                android:id="@+id/tvHelp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:lineSpacingExtra="4dp"
-                android:textColor="@color/text"
-                android:textIsSelectable="true"
-                android:textSize="14sp" />
-        </com.google.android.material.card.MaterialCardView>
-
-        <TextView
-            android:id="@+id/tvRepo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="github.com/vitvu/adblocal"
-            android:textColor="@color/blue"
-            android:textSize="13sp" />
     </LinearLayout>
 </ScrollView>

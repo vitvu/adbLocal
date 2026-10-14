@@ -8,7 +8,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = Prefs(context)
         val boot = intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
-        if (prefs.enabled && (!boot || prefs.startOnBoot)) {
+        if (prefs.enabled && (!boot || prefs.auto)) {
             runCatching { AdbShareService.start(context) }
         }
     }

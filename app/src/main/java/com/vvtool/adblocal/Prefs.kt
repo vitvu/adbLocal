@@ -11,14 +11,10 @@ class Prefs(context: Context) {
         get() = sp.getInt("port", 5555)
         set(v) = sp.edit { putInt("port", v) }
 
-    /** Re-open the port automatically when Wi-Fi connects / after reboot. */
-    var autoOnWifi: Boolean
-        get() = sp.getBoolean("auto_wifi", true)
-        set(v) = sp.edit { putBoolean("auto_wifi", v) }
-
-    var startOnBoot: Boolean
-        get() = sp.getBoolean("boot", true)
-        set(v) = sp.edit { putBoolean("boot", v) }
+    /** Start on boot and reopen the port whenever Wi-Fi connects. */
+    var auto: Boolean
+        get() = sp.getBoolean("auto", true)
+        set(v) = sp.edit { putBoolean("auto", v) }
 
     /** Whether the user wants the service running (restored after reboot). */
     var enabled: Boolean

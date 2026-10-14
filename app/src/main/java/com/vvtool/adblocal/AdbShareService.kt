@@ -61,6 +61,7 @@ class AdbShareService : Service() {
     @Volatile
     private var pairing = false
     private var pairPort = -1
+    private val monitor by lazy { ClientMonitor(this) }
 
     private val netCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = schedule(2000)
@@ -109,6 +110,7 @@ class AdbShareService : Service() {
         running = false
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netCallback) }
         nm.cancel(NOTIF_PAIR)
+        handler.post { monitor.close() }
         worker.quitSafely()
         ShareState.update { Status(port = prefs.port, addresses = NetUtil.lanAddresses()) }
         super.onDestroy()
@@ -126,36 +128,40 @@ class AdbShareService : Service() {
         val port = prefs.port
         val addrs = NetUtil.lanAddresses()
 
-        if (AdbController.isListening(port)) {
-            set(Phase.SHARING, "Ready · adb connect ${addrs.firstOrNull()?.ip ?: "<ip>"}:$port", addrs)
-            schedule(15_000)
-            return
-        }
-        if (addrs.isEmpty()) {
-            set(Phase.WAITING_NETWORK, "Waiting for Wi-Fi…", addrs)
-            return
+        if (AdbController.isListening(port)) return sharing(addrs)
+        monitor.close()
+        if (addrs.isEmpty()) return set(Phase.WAITING_NETWORK, "Waiting for Wi-Fi…", addrs)
+        if (!AdbController.supported) {
+            return set(Phase.NEED_SETUP, "Run the setup step below", addrs, retry = 5_000)
         }
 
         set(Phase.WORKING, "Opening port $port…", addrs)
         when (val r = AdbController.openPort(this, port)) {
-            AdbController.Result.Ok -> {
-                set(Phase.SHARING, "Ready · adb connect ${addrs.first().ip}:$port", addrs)
-                schedule(15_000)
-            }
+            AdbController.Result.Ok -> sharing(addrs)
             AdbController.Result.NoWifi -> set(Phase.WAITING_NETWORK, "Waiting for Wi-Fi…", addrs)
-            AdbController.Result.NeedWireless ->
-                set(Phase.NEED_WIRELESS, "Turn on Wireless debugging in Developer options", addrs, retry = 5_000)
-            AdbController.Result.NeedPair ->
-                set(Phase.NEED_PAIR, "Pairing needed once. Tap \"Pair\" in the app", addrs)
-            AdbController.Result.Unsupported ->
-                set(Phase.ERROR, "Android ${Build.VERSION.RELEASE} has no Wireless debugging (Android 11+ required)", addrs)
+            AdbController.Result.NeedWireless, AdbController.Result.NeedPair, AdbController.Result.Unsupported ->
+                set(Phase.NEED_SETUP, "Finish the setup below", addrs, retry = 5_000)
             is AdbController.Result.Error -> set(Phase.ERROR, r.message, addrs, retry = 10_000)
         }
     }
 
-    private fun set(phase: Phase, msg: String, addrs: List<NetUtil.Addr>, retry: Long = 0) {
-        ShareState.update { Status(serviceOn = true, phase = phase, port = prefs.port, addresses = addrs, message = msg) }
-        val title = if (phase == Phase.SHARING) "ADB Local · ${addrs.firstOrNull()?.ip}:${prefs.port}" else "ADB Local"
+    private fun sharing(addrs: List<NetUtil.Addr>) {
+        val clients = monitor.poll(prefs.port)
+        val msg = when {
+            clients.isNullOrEmpty() -> "Ready"
+            else -> "${clients.size} PC connected"
+        }
+        set(Phase.SHARING, msg, addrs, clients = clients)
+        schedule(3_000)
+    }
+
+    private fun set(
+        phase: Phase, msg: String, addrs: List<NetUtil.Addr>, retry: Long = 0, clients: List<ClientInfo>? = null,
+    ) {
+        ShareState.update {
+            Status(serviceOn = true, phase = phase, port = prefs.port, addresses = addrs, message = msg, clients = clients)
+        }
+        val title = if (phase == Phase.SHARING) "${addrs.firstOrNull()?.ip}:${prefs.port}" else "ADB Local"
         val key = "$title|$msg"
         if (key != lastNotif) {
             lastNotif = key
@@ -170,13 +176,13 @@ class AdbShareService : Service() {
         if (!AdbController.supported) return checkNow()
         pairing = true
         handler.removeCallbacks(check)
-        set(Phase.PAIRING, "Open \"Pair device with pairing code\" in Wireless debugging", NetUtil.lanAddresses())
+        set(Phase.PAIRING, "Tap \"Pair device with pairing code\"", NetUtil.lanAddresses())
         showPairNotification("Looking for pairing request…", "In Wireless debugging, tap \"Pair device with pairing code\"", false)
         pairPort = AdbController.findPairingPort(this, 120_000)
         if (pairPort <= 0) {
             nm.cancel(NOTIF_PAIR)
             pairing = false
-            set(Phase.NEED_PAIR, "Pairing timed out. Try again", NetUtil.lanAddresses())
+            set(Phase.NEED_SETUP, "Pairing timed out. Try again", NetUtil.lanAddresses())
             return
         }
         showPairNotification("Pairing request found", "Tap \"Enter code\" and type the 6 digits shown on screen", true)

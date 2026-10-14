@@ -4,7 +4,9 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArraySet
 
-enum class Phase { OFF, WAITING_NETWORK, WORKING, NEED_WIRELESS, NEED_PAIR, PAIRING, SHARING, ERROR }
+enum class Phase { OFF, WAITING_NETWORK, WORKING, NEED_SETUP, PAIRING, SHARING, ERROR }
+
+data class ClientInfo(val ip: String, val since: Long)
 
 data class Status(
     val serviceOn: Boolean = false,
@@ -12,6 +14,8 @@ data class Status(
     val port: Int = 0,
     val addresses: List<NetUtil.Addr> = emptyList(),
     val message: String = "",
+    /** PCs connected to adbd; null when this device does not let us see them. */
+    val clients: List<ClientInfo>? = null,
 )
 
 /** Process-wide observable status shared between the service, UI and tile. */
