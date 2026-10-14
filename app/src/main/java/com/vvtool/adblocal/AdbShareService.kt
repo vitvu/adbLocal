@@ -80,7 +80,7 @@ class AdbShareService : Service() {
         handler = Handler(worker.looper)
         createChannels()
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        ServiceCompat.startForeground(this, NOTIF_ID, buildNotification("ADB Local", "Đang khởi động…"), type)
+        ServiceCompat.startForeground(this, NOTIF_ID, buildNotification("ADB Local", "Starting…"), type)
         runCatching {
             getSystemService(ConnectivityManager::class.java)
                 .registerNetworkCallback(NetworkRequest.Builder().build(), netCallback)
@@ -127,28 +127,28 @@ class AdbShareService : Service() {
         val addrs = NetUtil.lanAddresses()
 
         if (AdbController.isListening(port)) {
-            set(Phase.SHARING, "Sẵn sàng · adb connect ${addrs.firstOrNull()?.ip ?: "<ip>"}:$port", addrs)
+            set(Phase.SHARING, "Ready · adb connect ${addrs.firstOrNull()?.ip ?: "<ip>"}:$port", addrs)
             schedule(15_000)
             return
         }
         if (addrs.isEmpty()) {
-            set(Phase.WAITING_NETWORK, "Đang chờ kết nối Wi-Fi…", addrs)
+            set(Phase.WAITING_NETWORK, "Waiting for Wi-Fi…", addrs)
             return
         }
 
-        set(Phase.WORKING, "Đang mở cổng $port…", addrs)
+        set(Phase.WORKING, "Opening port $port…", addrs)
         when (val r = AdbController.openPort(this, port)) {
             AdbController.Result.Ok -> {
-                set(Phase.SHARING, "Sẵn sàng · adb connect ${addrs.first().ip}:$port", addrs)
+                set(Phase.SHARING, "Ready · adb connect ${addrs.first().ip}:$port", addrs)
                 schedule(15_000)
             }
-            AdbController.Result.NoWifi -> set(Phase.WAITING_NETWORK, "Đang chờ kết nối Wi-Fi…", addrs)
+            AdbController.Result.NoWifi -> set(Phase.WAITING_NETWORK, "Waiting for Wi-Fi…", addrs)
             AdbController.Result.NeedWireless ->
-                set(Phase.NEED_WIRELESS, "Hãy bật Gỡ lỗi không dây trong Tùy chọn nhà phát triển", addrs, retry = 5_000)
+                set(Phase.NEED_WIRELESS, "Turn on Wireless debugging in Developer options", addrs, retry = 5_000)
             AdbController.Result.NeedPair ->
-                set(Phase.NEED_PAIR, "Cần ghép đôi 1 lần. Nhấn \"Ghép đôi\" trong app", addrs)
+                set(Phase.NEED_PAIR, "Pairing needed once. Tap \"Pair\" in the app", addrs)
             AdbController.Result.Unsupported ->
-                set(Phase.ERROR, "Android ${Build.VERSION.RELEASE} không có Gỡ lỗi không dây (cần Android 11+)", addrs)
+                set(Phase.ERROR, "Android ${Build.VERSION.RELEASE} has no Wireless debugging (Android 11+ required)", addrs)
             is AdbController.Result.Error -> set(Phase.ERROR, r.message, addrs, retry = 10_000)
         }
     }
@@ -170,27 +170,27 @@ class AdbShareService : Service() {
         if (!AdbController.supported) return checkNow()
         pairing = true
         handler.removeCallbacks(check)
-        set(Phase.PAIRING, "Mở \"Ghép nối thiết bị bằng mã ghép nối\" trong Gỡ lỗi không dây", NetUtil.lanAddresses())
-        showPairNotification("Đang tìm mã ghép đôi…", "Trong Gỡ lỗi không dây, nhấn \"Ghép nối thiết bị bằng mã ghép nối\"", false)
+        set(Phase.PAIRING, "Open \"Pair device with pairing code\" in Wireless debugging", NetUtil.lanAddresses())
+        showPairNotification("Looking for pairing request…", "In Wireless debugging, tap \"Pair device with pairing code\"", false)
         pairPort = AdbController.findPairingPort(this, 120_000)
         if (pairPort <= 0) {
             nm.cancel(NOTIF_PAIR)
             pairing = false
-            set(Phase.NEED_PAIR, "Hết thời gian chờ ghép đôi. Thử lại", NetUtil.lanAddresses())
+            set(Phase.NEED_PAIR, "Pairing timed out. Try again", NetUtil.lanAddresses())
             return
         }
-        showPairNotification("Đã thấy yêu cầu ghép đôi", "Nhấn \"Nhập mã\" và gõ 6 số đang hiện trên màn hình", true)
+        showPairNotification("Pairing request found", "Tap \"Enter code\" and type the 6 digits shown on screen", true)
     }
 
     private fun finishPairing(code: String) {
         if (pairPort <= 0 || code.length < 6) {
-            showPairNotification("Mã không hợp lệ", "Nhập đúng 6 số đang hiện trên màn hình", true)
+            showPairNotification("Invalid code", "Enter the 6 digits shown on screen", true)
             return
         }
-        showPairNotification("Đang ghép đôi…", "Mã $code", false)
+        showPairNotification("Pairing…", "Code $code", false)
         val ok = runCatching { AdbController.pair(this, pairPort, code) }.getOrDefault(false)
         if (!ok) {
-            showPairNotification("Ghép đôi thất bại", "Sai mã hoặc hộp thoại đã đóng. Mở lại và nhập mã mới", true)
+            showPairNotification("Pairing failed", "Wrong code or the dialog was closed. Reopen it and enter the new code", true)
             beginPairing()
             return
         }
@@ -199,8 +199,8 @@ class AdbShareService : Service() {
         nm.cancel(NOTIF_PAIR)
         nm.notify(NOTIF_PAIR, NotificationCompat.Builder(this, CHANNEL_PAIR)
             .setSmallIcon(R.drawable.ic_adb)
-            .setContentTitle("Ghép đôi thành công")
-            .setContentText("Đang mở cổng ADB ${prefs.port}…")
+            .setContentTitle("Paired successfully")
+            .setContentText("Opening ADB port ${prefs.port}…")
             .setTimeoutAfter(5000)
             .setAutoCancel(true)
             .build())
@@ -223,8 +223,8 @@ class AdbShareService : Service() {
             val pi = PendingIntent.getService(
                 this, 3, Intent(this, AdbShareService::class.java).setAction(ACTION_PAIR_CODE), flags,
             )
-            val input = RemoteInput.Builder(KEY_CODE).setLabel("Mã ghép đôi 6 số").build()
-            b.addAction(NotificationCompat.Action.Builder(R.drawable.ic_adb, "Nhập mã", pi).addRemoteInput(input).build())
+            val input = RemoteInput.Builder(KEY_CODE).setLabel("6-digit pairing code").build()
+            b.addAction(NotificationCompat.Action.Builder(R.drawable.ic_adb, "Enter code", pi).addRemoteInput(input).build())
         }
         nm.notify(NOTIF_PAIR, b.build())
     }
@@ -233,8 +233,8 @@ class AdbShareService : Service() {
 
     private fun createChannels() {
         if (Build.VERSION.SDK_INT < 26) return
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Chia sẻ ADB", NotificationManager.IMPORTANCE_LOW))
-        nm.createNotificationChannel(NotificationChannel(CHANNEL_PAIR, "Ghép đôi", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "ADB sharing", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_PAIR, "Pairing", NotificationManager.IMPORTANCE_HIGH))
     }
 
     private fun buildNotification(title: String, text: String): Notification {
@@ -254,7 +254,7 @@ class AdbShareService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Dừng", stop)
+            .addAction(0, "Stop", stop)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }

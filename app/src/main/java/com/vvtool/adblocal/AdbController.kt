@@ -71,14 +71,14 @@ object AdbController {
 
         val client = AdbClient.create(ctx)
         try {
-            if (!client.connectTls(ctx, 12_000)) return Result.Error("Không kết nối được tới Gỡ lỗi không dây")
+            if (!client.connectTls(ctx, 12_000)) return Result.Error("Could not connect to Wireless debugging")
         } catch (_: AdbPairingRequiredException) {
             Prefs(ctx).paired = false
             return Result.NeedPair
         } catch (_: InterruptedException) {
-            return Result.Error("Không tìm thấy Gỡ lỗi không dây. Hãy bật nó và chọn \"Luôn cho phép trên mạng này\"")
+            return Result.Error("Wireless debugging not found. Turn it on and choose \"Always allow on this network\"")
         } catch (e: Exception) {
-            return Result.Error("Lỗi kết nối ADB: ${e.message}")
+            return Result.Error("ADB connection error: ${e.message}")
         }
 
         try {
@@ -89,7 +89,7 @@ object AdbController {
             }
             run(client, "tcpip:$port")
         } catch (e: Exception) {
-            return Result.Error("Lỗi khi mở cổng: ${e.message}")
+            return Result.Error("Failed to open port: ${e.message}")
         } finally {
             runCatching { client.close() }
         }
@@ -99,7 +99,7 @@ object AdbController {
             if (isListening(port)) return Result.Ok
             Thread.sleep(300)
         }
-        return Result.Error("adbd không mở cổng $port")
+        return Result.Error("adbd did not open port $port")
     }
 
     private fun run(client: AdbClient, destination: String): String {

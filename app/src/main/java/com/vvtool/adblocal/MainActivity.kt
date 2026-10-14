@@ -99,24 +99,24 @@ class MainActivity : AppCompatActivity() {
         val ip = s.addresses.firstOrNull()?.ip ?: NetUtil.lanAddresses().firstOrNull()?.ip
         val port = prefs.port
         val (label, color) = when (s.phase) {
-            Phase.SHARING -> "Đang chia sẻ ADB" to 0xFF7CFFB2.toInt()
-            Phase.OFF -> "Đã tắt" to 0x99FFFFFF.toInt()
-            Phase.ERROR -> "Có lỗi" to 0xFFFFB4AB.toInt()
-            Phase.NEED_PAIR, Phase.NEED_WIRELESS -> "Cần thiết lập" to 0xFFFFE08A.toInt()
-            Phase.PAIRING -> "Đang ghép đôi" to 0xFFFFE08A.toInt()
-            else -> "Đang chuẩn bị" to 0xFFFFE08A.toInt()
+            Phase.SHARING -> "Sharing ADB" to 0xFF7CFFB2.toInt()
+            Phase.OFF -> "Off" to 0x99FFFFFF.toInt()
+            Phase.ERROR -> "Error" to 0xFFFFB4AB.toInt()
+            Phase.NEED_PAIR, Phase.NEED_WIRELESS -> "Setup needed" to 0xFFFFE08A.toInt()
+            Phase.PAIRING -> "Pairing" to 0xFFFFE08A.toInt()
+            else -> "Starting" to 0xFFFFE08A.toInt()
         }
         tvStatus.text = label
         dot.background.setTint(color)
-        tvAddress.text = if (ip != null) "$ip:$port" else "Chưa có Wi-Fi"
-        tvMessage.text = if (s.serviceOn) s.message else "Nhấn Bắt đầu để mở ADB trên cổng $port"
-        btnToggle.text = if (s.serviceOn) "Dừng" else "Bắt đầu"
+        tvAddress.text = if (ip != null) "$ip:$port" else "No Wi-Fi"
+        tvMessage.text = if (s.serviceOn) s.message else "Tap Start to open ADB on port $port"
+        btnToggle.text = if (s.serviceOn) "Stop" else "Start"
         tvHelp.text = buildString {
             val addr = "${ip ?: "<ip>"}:$port"
-            appendLine("1. PC và điện thoại cùng mạng Wi-Fi / LAN.")
-            appendLine("2. Trên PC:  adb connect $addr")
-            appendLine("3. Điện thoại hiện \"Cho phép gỡ lỗi USB?\" → chọn Luôn cho phép → Cho phép.")
-            append("4. Truyền màn hình mượt:  scrcpy -s $addr --video-bit-rate 8M --max-fps 60")
+            appendLine("1. PC and phone on the same Wi-Fi / LAN.")
+            appendLine("2. On the PC:  adb connect $addr")
+            appendLine("3. The phone asks \"Allow USB debugging?\" → tick Always allow → Allow.")
+            append("4. Smooth screen mirroring:  scrcpy -s $addr --video-bit-rate 8M --max-fps 60")
         }
         refreshSteps()
     }
@@ -132,35 +132,35 @@ class MainActivity : AppCompatActivity() {
         val list = findViewById<LinearLayout>(R.id.stepList)
         if (!AdbController.supported) {
             list.addView(text(
-                "Android ${Build.VERSION.RELEASE} không có \"Gỡ lỗi không dây\" nên ứng dụng không thể tự mở ADB " +
-                    "khi chưa root. Đây là giới hạn bảo mật của Android: cần Android 11 trở lên.\n\n" +
-                    "App vẫn tự nhận ra nếu cổng ${prefs.port} đã được mở sẵn (adb tcpip từ PC).",
+                "Android ${Build.VERSION.RELEASE} has no \"Wireless debugging\", so an app cannot open ADB by itself " +
+                    "without root. This is an Android security limit: Android 11 or newer is required.\n\n" +
+                    "The app still detects port ${prefs.port} if it was already opened (adb tcpip from a PC).",
                 14f, R.color.text_muted,
             ))
             return
         }
-        addStep(list, "1. Bật Tùy chọn nhà phát triển",
-            "Cài đặt › Thông tin điện thoại › nhấn \"Số hiệu bản tạo\" 7 lần",
+        addStep(list, "1. Enable Developer options",
+            "Settings › About phone › tap \"Build number\" 7 times",
             { Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1 },
-            { "Mở" }) {
+            { "Open" }) {
             val dev = Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
             runCatching {
                 startActivity(Intent(if (dev) Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS else Settings.ACTION_DEVICE_INFO_SETTINGS))
             }
         }
-        addStep(list, "2. Bật Gỡ lỗi không dây",
-            "Trong Tùy chọn nhà phát triển. Khi được hỏi, chọn \"Luôn cho phép trên mạng này\"",
-            { AdbController.isWirelessDebuggingOn(this) }, { if (it) "Mở" else "Bật" }) {
+        addStep(list, "2. Turn on Wireless debugging",
+            "In Developer options. When asked, choose \"Always allow on this network\"",
+            { AdbController.isWirelessDebuggingOn(this) }, { if (it) "Open" else "Turn on" }) {
             runCatching { startActivity(AdbController.wirelessSettingsIntent()) }
         }
-        addStep(list, "3. Ghép đôi với chính máy này",
-            "Nhấn Ghép đôi → trong Gỡ lỗi không dây chọn \"Ghép nối thiết bị bằng mã ghép nối\" → " +
-                "nhập 6 số vào thông báo của ADB Local. Chỉ cần làm 1 lần",
-            { prefs.paired }, { if (it) "Ghép lại" else "Ghép đôi" }) {
+        addStep(list, "3. Pair with this phone",
+            "Tap Pair → in Wireless debugging choose \"Pair device with pairing code\" → " +
+                "type the 6 digits into the ADB Local notification. Only needed once",
+            { prefs.paired }, { if (it) "Re-pair" else "Pair" }) {
             withNotifications {
                 AdbShareService.startPairing(this)
                 runCatching { startActivity(AdbController.wirelessSettingsIntent()) }
-                toast("Mở \"Ghép nối thiết bị bằng mã ghép nối\", rồi nhập mã ở thông báo")
+                toast("Open \"Pair device with pairing code\", then enter the code in the notification")
             }
         }
     }
@@ -200,7 +200,7 @@ class MainActivity : AppCompatActivity() {
     private fun refreshSteps() {
         for (s in steps) {
             val done = s.state()
-            s.status.text = if (done) "Xong" else "Chưa"
+            s.status.text = if (done) "Done" else "To do"
             s.status.setTextColor(ContextCompat.getColor(this, if (done) R.color.green else R.color.amber))
             s.status.background.setTint(ContextCompat.getColor(this, if (done) R.color.green_soft else R.color.amber_soft))
             s.button.text = s.buttonLabel(done)
@@ -218,22 +218,22 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnSavePort).setOnClickListener { savePort() }
 
         val list = findViewById<LinearLayout>(R.id.switchList)
-        addSwitch(list, "Tự bật ADB khi có Wi-Fi",
-            "Tự mở lại cổng khi kết nối Wi-Fi hoặc sau khi khởi động lại máy", prefs.autoOnWifi) { prefs.autoOnWifi = it }
-        addSwitch(list, "Khởi động cùng máy",
-            "Tự chạy dịch vụ sau khi bật máy", prefs.startOnBoot) { prefs.startOnBoot = it }
+        addSwitch(list, "Auto-enable ADB on Wi-Fi",
+            "Reopen the port when Wi-Fi connects or after a reboot", prefs.autoOnWifi) { prefs.autoOnWifi = it }
+        addSwitch(list, "Start on boot",
+            "Run the service automatically after the phone starts", prefs.startOnBoot) { prefs.startOnBoot = it }
     }
 
     private fun savePort() {
         val p = etPort.text?.toString()?.toIntOrNull()
         if (p == null || p !in 1024..65535) {
-            etPort.error = "Cổng phải trong khoảng 1024 – 65535"
+            etPort.error = "Port must be between 1024 and 65535"
             return
         }
         if (p != prefs.port) {
             prefs.port = p
             if (AdbShareService.running) AdbShareService.start(this)
-            toast("Đã lưu cổng $p")
+            toast("Port $p saved")
         }
         etPort.clearFocus()
         render(ShareState.status)
@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun copy(s: String) {
         getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("adb", s))
-        toast("Đã sao chép: $s")
+        toast("Copied: $s")
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

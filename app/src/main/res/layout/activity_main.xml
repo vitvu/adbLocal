@@ -42,7 +42,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Chia sẻ ADB qua mạng LAN, như cắm cáp USB"
+                    android:text="Share ADB over your LAN, just like a USB cable"
                     android:textColor="@color/text_muted"
                     android:textSize="14sp" />
             </LinearLayout>
@@ -145,7 +145,7 @@
                     android:layout_height="56dp"
                     android:layout_marginStart="10dp"
                     android:backgroundTint="#33FFFFFF"
-                    android:contentDescription="Sao chép lệnh adb connect"
+                    android:contentDescription="Copy adb connect command"
                     android:insetLeft="0dp"
                     android:insetRight="0dp"
                     android:padding="0dp"
@@ -156,7 +156,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <TextView style="@style/Section" android:text="Thiết lập 1 lần" />
+        <TextView style="@style/Section" android:text="One-time setup" />
 
         <com.google.android.material.card.MaterialCardView style="@style/Card">
 
@@ -167,7 +167,7 @@
                 android:orientation="vertical" />
         </com.google.android.material.card.MaterialCardView>
 
-        <TextView style="@style/Section" android:text="Cài đặt" />
+        <TextView style="@style/Section" android:text="Settings" />
 
         <com.google.android.material.card.MaterialCardView style="@style/Card">
 
@@ -187,7 +187,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="Cổng cố định (1024 – 65535)"
+                        android:hint="Fixed port (1024 – 65535)"
                         app:boxCornerRadiusBottomEnd="16dp"
                         app:boxCornerRadiusBottomStart="16dp"
                         app:boxCornerRadiusTopEnd="16dp"
@@ -209,7 +209,7 @@
                         android:layout_height="56dp"
                         android:layout_marginStart="10dp"
                         android:layout_marginTop="4dp"
-                        android:text="Lưu" />
+                        android:text="Save" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -221,7 +221,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <TextView style="@style/Section" android:text="Cách kết nối từ PC" />
+        <TextView style="@style/Section" android:text="Connect from a PC" />
 
         <com.google.android.material.card.MaterialCardView style="@style/Card">
 
