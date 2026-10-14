@@ -1,0 +1,46 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.ADBLocal" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/blue_light</item>
+        <item name="colorOnPrimaryContainer">@color/on_blue_light</item>
+        <item name="colorSecondary">@color/blue</item>
+        <item name="colorSecondaryContainer">@color/blue_soft</item>
+        <item name="colorOnSecondaryContainer">@color/on_blue_light</item>
+        <item name="colorSurface">@color/white</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="colorOnSurfaceVariant">@color/text_muted</item>
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorOutlineVariant">@color/outline</item>
+        <item name="colorSurfaceContainerHighest">@color/blue_soft</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="shapeAppearanceCornerLarge">@style/Shape.Large</item>
+    </style>
+
+    <style name="Shape.Large" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
+    <style name="Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/white</item>
+        <item name="cardCornerRadius">24dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="contentPadding">18dp</item>
+    </style>
+
+    <style name="Section" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">22dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:layout_marginStart">6dp</item>
+        <item name="android:textColor">@color/blue</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>
