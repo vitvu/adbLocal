@@ -26,6 +26,8 @@
     </style>
 
     <style name="Card" parent="Widget.Material3.CardView.Filled">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
         <item name="cardBackgroundColor">@color/white</item>
         <item name="cardCornerRadius">24dp</item>
         <item name="strokeWidth">0dp</item>
